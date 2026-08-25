@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Claude conversation</title>
+    <link rel="stylesheet" href="viewer.css" />
+  </head>
+  <body>
+    <div class="toolbar no-print">
+      <button id="print" type="button">Save as PDF…</button>
+      <div class="theme-switch" role="group" aria-label="PDF theme">
+        <button type="button" id="theme-light" data-theme="warm">Light</button>
+        <button type="button" id="theme-dark" data-theme="dark">Dark</button>
+      </div>
+      <span class="hint">
+        Destination: <strong>Save as PDF</strong>. Enable
+        <strong>Background graphics</strong>. Turn headers and footers off.
+      </span>
+    </div>
+    <article id="doc"></article>
+    <script src="viewer.js"></script>
+  </body>
+</html>

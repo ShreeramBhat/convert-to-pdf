@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Claude to PDF</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <div class="mark">PDF</div>
+      <div>
+        <h1>Claude to PDF</h1>
+        <p id="page-line">Checking this tab…</p>
+      </div>
+    </header>
+
+    <section id="not-claude" class="banner hidden">
+      Open a conversation on <strong>claude.ai</strong> — a live chat or a share link — then click the extension again.
+    </section>
+
+    <section id="controls" class="hidden">
+      <label class="row">
+        PDF theme
+        <select id="theme">
+          <option value="auto" selected>Match this page</option>
+          <option value="warm">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
+      <p id="theme-hint" class="hint"></p>
+      <label class="row">
+        Page
+        <select id="page">
+          <option value="A4" selected>A4</option>
+          <option value="Letter">Letter</option>
+        </select>
+      </label>
+      <label class="check">
+        <input type="checkbox" id="thinking" />
+        Include thinking blocks
+      </label>
+      <label class="check">
+        <input type="checkbox" id="tools" />
+        Include raw tool-result text
+      </label>
+      <label class="check">
+        <input type="checkbox" id="autoprint" checked />
+        Open the print dialog automatically
+      </label>
+
+      <button id="pdf" class="primary" type="button">Export PDF</button>
+      <div class="split">
+        <button id="html" type="button">Download HTML</button>
+        <button id="md" type="button">Download Markdown</button>
+      </div>
+      <button id="test" class="ghost" type="button">Test 50 conversations</button>
+    </section>
+
+    <section id="loader" class="loader hidden" aria-live="polite">
+      <div class="spinner" aria-hidden="true"></div>
+      <div class="loader-copy">
+        <p class="loader-title" id="loader-title">Exporting…</p>
+        <p class="loader-text" id="loader-text">Starting…</p>
+        <p class="loader-time" id="loader-time">0s elapsed</p>
+        <div class="bar" aria-hidden="true"><i id="loader-bar"></i></div>
+        <p class="hint">Long chats can take a minute. A loader also appears on the Claude page if you close this popup.</p>
+      </div>
+    </section>
+
+    <p id="status"></p>
+    <script src="popup.js"></script>
+  </body>
+</html>

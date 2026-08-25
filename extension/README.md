@@ -1,0 +1,48 @@
+# Claude to PDF
+
+Chrome extension that turns a **claude.ai** conversation — live chat or share link — into a typeset PDF. Messages, fenced code (whitespace preserved), images, artifacts, and attachments are included. The layout matches the warm transcript style in this repo’s `build_pdf.py` skill.
+
+Everything runs locally in your browser. The extension only talks to `claude.ai` (the same JSON API the site already uses, plus the images already on the page).
+
+## Install (unpacked)
+
+1. Open `chrome://extensions`.
+2. Turn on **Developer mode**.
+3. Click **Load unpacked** and select this `extension/` folder.
+4. Pin **Claude to PDF** to the toolbar.
+
+## Use
+
+1. Open a conversation:
+   - Live chat: `https://claude.ai/chat/…`
+   - Share link: `https://claude.ai/share/…`
+2. Click the extension icon.
+3. **Export PDF**. A preview tab opens and Chrome’s print dialog appears.
+4. Set **Destination → Save as PDF**.
+5. Enable **Background graphics**. Turn **Headers and footers** off.
+
+The PDF defaults to the Claude tab’s look: light page if Claude is light, dark page if Claude is dark. Change it in the popup (**Match this page / Light / Dark**) or with Light/Dark on the preview toolbar.
+
+You can also download a standalone HTML file or a Markdown transcript (the same `::: turn` format `build_pdf.py` already understands).
+
+## What is captured
+
+- The active conversation branch (not discarded regenerations)
+- User and Claude turns, timestamps, tool chips
+- Fenced code with original indentation
+- Uploaded and generated **images**, inlined so the PDF does not depend on live URLs
+- Extra pictures still visible on the page (screenshots, “code images”, artifact previews)
+- Artifacts / created files as code blocks
+- Optional thinking blocks and raw tool-result text
+
+If Claude’s internal API is blocked (some share pages), the extension falls back to reading the rendered page.
+
+## Permissions
+
+| Permission | Why |
+|---|---|
+| `https://claude.ai/*` | Read the open conversation and fetch images with your existing session cookie |
+| `storage` / `unlimitedStorage` | Hand the print-ready HTML (including inlined images) to the preview tab |
+| `scripting` | Inject the exporter if you installed the extension after the tab was already open |
+
+No analytics. Nothing is sent off your machine except the `claude.ai` requests the site itself already makes.
