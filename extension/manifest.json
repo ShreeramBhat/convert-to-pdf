@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Claude to PDF",
-  "version": "1.0.6",
+  "version": "1.0.8",
   "description": "Export a Claude chat or share link to a typeset PDF, including messages, code, images, artifacts, and attachments.",
   "permissions": ["storage", "scripting", "unlimitedStorage"],
   "host_permissions": [

@@ -1,6 +1,6 @@
 /* global CTP */
 (function () {
-  window.__ctpVersion = "1.0.6";
+  window.__ctpVersion = "1.0.8";
 
   var overlay = null;
   var overlayStarted = 0;

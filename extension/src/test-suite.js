@@ -84,20 +84,34 @@ CTP.test = {
         includeThinking: true,
         includeToolResults: false,
         skipDomImages: true,
+        /* The page is showing one conversation while we render fifty others;
+           its charts belong to none of them. */
+        skipDomFigures: true,
         appearance: "dark",
         theme: "dark",
       });
       var payload = CTP.html.buildPayload(model, { theme: "dark", appearance: "dark", autoPrint: false });
       row.turns = (model.turns || []).length;
       row.htmlBytes = (payload.body || "").length;
+      row.charts = model.charts || 0;
+      row.chartErrors = model.chartErrors || [];
       row.partTypes = {};
       (model.turns || []).forEach(function (t) {
         (t.parts || []).forEach(function (p) {
           row.partTypes[p.type] = (row.partTypes[p.type] || 0) + 1;
         });
       });
+      row.mdBytes = CTP.md.transcript(model).length;
       if (!row.turns) throw new Error("Renderer produced 0 turns");
       if (row.htmlBytes < 80) throw new Error("HTML too small");
+      if (row.mdBytes < 40) throw new Error("Markdown too small");
+      /* An unrendered part type means a block shape the renderer silently drops. */
+      row.emptyParts = 0;
+      (model.turns || []).forEach(function (t) {
+        (t.parts || []).forEach(function (p) {
+          if (!CTP.html.renderPart(p)) row.emptyParts += 1;
+        });
+      });
       row.ok = true;
     } catch (e) {
       row.ok = false;
@@ -140,12 +154,23 @@ CTP.test = {
         kinds["tool:" + t] = (kinds["tool:" + t] || 0) + 1;
       });
     });
+    var charts = 0;
+    var chartErrors = [];
+    var emptyParts = 0;
+    results.forEach(function (r) {
+      charts += r.charts || 0;
+      emptyParts += r.emptyParts || 0;
+      chartErrors = chartErrors.concat(r.chartErrors || []);
+    });
     var report = {
       when: new Date().toISOString(),
       limit: limit,
       listed: list.length,
       passed: passed,
       failed: failed,
+      charts: charts,
+      chartErrors: chartErrors,
+      emptyParts: emptyParts,
       kinds: kinds,
       results: results,
     };

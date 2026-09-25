@@ -165,7 +165,12 @@ CTP.html = (function () {
       ".ctpfig svg { max-width: 100%; height: auto; }\n" +
       "details.chartdata { margin: 10px 0 14px; }\n" +
       "details.chartdata summary { font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 8pt; color: var(--mute); cursor: pointer; letter-spacing: .04em; text-transform: uppercase; font-weight: 700; }\n" +
-      "details.chartdata table.md { font-size: 8pt; margin-top: 8px; }\n"
+      "details.chartdata table.md { font-size: 8pt; margin-top: 8px; }\n" +
+      ".stepcard { margin: 10px 0 14px; border: 1px solid var(--line); border-radius: 6px; background: var(--tint); padding: 10px 14px 10px 8px; }\n" +
+      ".stepcard > p { margin: 0 0 8px 12px; }\n" +
+      ".stepcard ol { margin: 0; padding-left: 26px; }\n" +
+      ".stepcard li { margin-bottom: 7px; }\n" +
+      ".stepcard li > div { margin-top: 2px; }\n"
     );
   }
 
@@ -365,7 +370,16 @@ CTP.html = (function () {
     if (!url) return null;
     var src = await CTP.util.toImageDataUrl(url);
     if (!src) return null;
-    return { type: "image", src: src, href: url, caption: caption || "", alt: alt || caption || "" };
+    /* Absolute, because the DOM sweep dedupes against these and the browser
+       reports img.currentSrc absolute — a relative href here would let the same
+       picture through twice. */
+    return {
+      type: "image",
+      src: src,
+      href: CTP.util.absUrl(url),
+      caption: caption || "",
+      alt: alt || caption || "",
+    };
   }
 
   var NON_IMAGE_TOOLS = {
@@ -383,6 +397,7 @@ CTP.html = (function () {
     visualize: true,
     "visualize:show_widget": true,
     chart_display_v0: true,
+    step_card_display_v0: true,
     memory: true,
     memory_search: true,
     conversation_search: true,
@@ -618,7 +633,9 @@ CTP.html = (function () {
       file.thumbnail_url;
     if (kind === "image" || (preview && /^image\//.test(file.file_type || ""))) {
       var img = await imagePart(preview, name, name);
-      if (img) parts.push(img);
+      /* Falling back to a chip keeps an unreachable image visible in the PDF
+         instead of dropping the whole thing without a word. */
+      parts.push(img || { type: "file", name: name, extra: "image" });
       return parts;
     }
     if (preview && kind === "document") {
@@ -680,6 +697,48 @@ CTP.html = (function () {
       out.push(extras[i]);
     }
     return out;
+  }
+
+  /*
+   * step_card_display_v0 is {view, summary, steps:[{title, description}]} and
+   * renders on the page as a numbered card. Nothing of it reaches the PDF
+   * unless we lay the steps out ourselves.
+   */
+  function stepCard(input) {
+    if (!CTP.util.isRecord(input)) return null;
+    var steps = Array.isArray(input.steps) ? input.steps : [];
+    if (!steps.length) return null;
+    var items = steps
+      .map(function (st) {
+        if (!CTP.util.isRecord(st)) return "";
+        var title = st.title || st.name || "";
+        var body = st.description || st.text || st.body || "";
+        if (!title && !body) return "";
+        return (
+          "<li>" +
+          (title ? "<b>" + CTP.util.escapeHtml(title) + "</b>" : "") +
+          (body ? "<div>" + CTP.md.inline(String(body)) + "</div>" : "") +
+          "</li>"
+        );
+      })
+      .join("");
+    if (!items) return null;
+    var summary = input.summary ? String(input.summary) : "";
+    var md = steps
+      .map(function (st, i) {
+        if (!CTP.util.isRecord(st)) return "";
+        return (i + 1) + ". **" + (st.title || "") + "** " + (st.description || "");
+      })
+      .filter(Boolean)
+      .join("\n");
+    return {
+      type: "html",
+      md: (summary ? summary + "\n\n" : "") + md,
+      html:
+        '<div class="stepcard">' +
+        (summary ? "<p>" + CTP.md.inline(summary) + "</p>" : "") +
+        "<ol>" + items + "</ol></div>",
+    };
   }
 
   /* How many charts the conversation should have, so the page only gets
@@ -853,6 +912,12 @@ CTP.html = (function () {
                 title: "File: " + (input.path || input.description || "created file"),
                 text: input.file_text || input.content,
               });
+              continue;
+            }
+
+            if (name === "step_card_display_v0" || name.indexOf("step_card") === 0) {
+              var stepPart = stepCard(input);
+              if (stepPart) parts.push(stepPart);
               continue;
             }
 

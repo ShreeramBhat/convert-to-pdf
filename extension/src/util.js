@@ -73,8 +73,23 @@ CTP.util = {
     });
   },
 
-  looksLikeImageUrl: function (url) {
-    if (!url || typeof url !== "string") return false;
+  /* claude.ai hands back file URLs relative to the origin ("/api/<org>/files/…").
+     Every check below wants an absolute URL, so resolve first — otherwise an
+     uploaded image is rejected before anyone tries to fetch it. */
+  absUrl: function (url) {
+    var u = String(url == null ? "" : url);
+    if (!u) return "";
+    if (/^(data:|blob:)/i.test(u)) return u;
+    try {
+      return new URL(u, location.origin).href;
+    } catch (e) {
+      return u;
+    }
+  },
+
+  looksLikeImageUrl: function (raw) {
+    if (!raw || typeof raw !== "string") return false;
+    var url = CTP.util.absUrl(raw);
     if (url.indexOf("data:image/") === 0) return true;
     if (url.indexOf("blob:") === 0) return true;
     if (!/^https?:\/\//i.test(url)) return false;
@@ -84,14 +99,16 @@ CTP.util = {
     return false;
   },
 
-  canInlineImage: function (url) {
-    if (!url || typeof url !== "string") return false;
+  canInlineImage: function (raw) {
+    if (!raw || typeof raw !== "string") return false;
+    var url = CTP.util.absUrl(raw);
     if (url.indexOf("data:image/") === 0 || url.indexOf("blob:") === 0) return true;
     if (CTP.util.looksLikeImageUrl(url)) return true;
     return /https:\/\/([^/]+\.)?(claude\.ai|anthropic\.com|claudemcpcontent\.com)\//i.test(url);
   },
 
-  toImageDataUrl: async function (url) {
+  toImageDataUrl: async function (raw) {
+    var url = CTP.util.absUrl(raw);
     if (!url) return "";
     if (url.indexOf("data:image/") === 0) return url;
     if (url.indexOf("data:") === 0) return "";
@@ -171,6 +188,7 @@ CTP.util = {
       generate_image: "Generated an image",
       image_generation: "Generated an image",
       chart_display_v0: "Drew a chart",
+      step_card_display_v0: "Listed steps",
       visualize: "Showed a widget",
       "visualize:show_widget": "Showed a widget",
       memory: "Memory",
