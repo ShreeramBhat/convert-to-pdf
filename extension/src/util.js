@@ -158,6 +158,7 @@ CTP.util = {
       web_fetch: "Read a page",
       fetch: "Read a page",
       bash: "Ran a command",
+      bash_tool: "Ran a command",
       bash_code_execution: "Ran code",
       code_execution: "Ran code",
       repl: "Ran code",
@@ -169,6 +170,7 @@ CTP.util = {
       computer_use: "Used computer",
       generate_image: "Generated an image",
       image_generation: "Generated an image",
+      chart_display_v0: "Drew a chart",
       visualize: "Showed a widget",
       "visualize:show_widget": "Showed a widget",
       memory: "Memory",
@@ -179,6 +181,7 @@ CTP.util = {
     if (map[n]) return map[n];
     if (n.indexOf("search") !== -1) return "Searched the web";
     if (n.indexOf("image") !== -1) return "Image";
+    if (n.indexOf("chart") !== -1) return "Drew a chart";
     if (n.indexOf("visualize") !== -1) return "Showed a widget";
     if (n.indexOf("memory") !== -1) return "Memory";
     if (!n) return "Tool";

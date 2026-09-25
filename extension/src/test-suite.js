@@ -13,6 +13,7 @@ CTP.test = {
       images: 0,
       artifacts: 0,
       widgets: 0,
+      charts: 0,
       citations: 0,
       tables: 0,
       code: 0,
@@ -49,6 +50,7 @@ CTP.test = {
           counts.tools[name] = (counts.tools[name] || 0) + 1;
           if (name === "artifacts") counts.artifacts += 1;
           if (String(name).indexOf("visualize") !== -1) counts.widgets += 1;
+          if (String(name).indexOf("chart") !== -1) counts.charts += 1;
         }
       });
     });
@@ -58,6 +60,7 @@ CTP.test = {
       counts.images && "images",
       counts.artifacts && "artifacts",
       counts.widgets && "widgets",
+      counts.charts && "charts",
       counts.citations && "citations",
       counts.tables && "tables",
       counts.code && "code",

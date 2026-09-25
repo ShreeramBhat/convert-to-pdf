@@ -11,6 +11,16 @@ const pageLine = document.getElementById("page-line");
 const notClaude = document.getElementById("not-claude");
 const controls = document.getElementById("controls");
 const statusEl = document.getElementById("status");
+
+function chartNote(res) {
+  if (!res) return "";
+  var bits = [];
+  if (res.charts) bits.push(res.charts + (res.charts === 1 ? " chart" : " charts"));
+  if (res.chartErrors && res.chartErrors.length) {
+    bits.push(res.chartErrors.length + " chart error(s): " + res.chartErrors[0]);
+  }
+  return bits.length ? " · " + bits.join(" · ") : "";
+}
 const pdfBtn = document.getElementById("pdf");
 const htmlBtn = document.getElementById("html");
 const mdBtn = document.getElementById("md");
@@ -134,9 +144,9 @@ async function run(format) {
     var res = await send(tab.id, { type: "CTP_EXPORT", opts: opts(format) });
     if (!res || !res.ok) throw new Error((res && res.error) || "Export failed.");
     if (format === "pdf") {
-      setStatus("Print preview opened · " + res.turns + " turns. Choose Save as PDF.", "ok");
+      setStatus("Print preview opened · " + res.turns + " turns" + chartNote(res) + ". Choose Save as PDF.", "ok");
     } else {
-      setStatus("Downloaded " + res.format.toUpperCase() + " · " + res.turns + " turns.", "ok");
+      setStatus("Downloaded " + res.format.toUpperCase() + " · " + res.turns + " turns" + chartNote(res) + ".", "ok");
     }
   } catch (e) {
     setStatus(e.message || String(e), "error");

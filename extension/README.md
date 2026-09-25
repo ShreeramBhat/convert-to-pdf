@@ -31,11 +31,21 @@ You can also download a standalone HTML file or a Markdown transcript (the same 
 - User and Claude turns, timestamps, tool chips
 - Fenced code with original indentation
 - Uploaded and generated **images**, inlined so the PDF does not depend on live URLs
+- **Charts and diagrams**, captured from the page as vector art with their title,
+  axis labels and legend intact, plus a collapsed table of the underlying numbers
 - Extra pictures still visible on the page (screenshots, “code images”, artifact previews)
 - Artifacts / created files as code blocks
 - Optional thinking blocks and raw tool-result text
 
-If Claude’s internal API is blocked (some share pages), the extension falls back to reading the rendered page.
+A chart is captured twice, once for a light PDF and once for a dark one, so the
+Light/Dark switch on the preview toolbar keeps it legible either way. Whichever view
+the widget is showing is what gets exported — switch it to **Table** in the chat and
+the PDF carries the full table, expanded to its natural height rather than clipped to
+the scroll box it uses on screen.
+
+If Claude’s internal API is blocked (some share pages), the extension falls back to
+reading the rendered page. That fallback keeps the charts and the wording but loses
+markdown structure such as headings and lists.
 
 ## Permissions
 

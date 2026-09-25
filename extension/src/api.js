@@ -137,11 +137,24 @@ CTP.api = {
 
   fetchConversation: async function (page) {
     if (page.kind === "share") {
-      return CTP.api.fetchJSON(
-        "/api/chat_snapshots/" +
-          page.id +
-          "?rendering_mode=messages&render_all_tools=true"
-      );
+      var q = "?rendering_mode=messages&render_all_tools=true";
+      /* Share snapshots moved under the organization; the bare path now answers
+         403 for a signed-in viewer. Anonymous viewers have no org, so the old
+         path stays as the fallback. */
+      var paths = [];
+      try {
+        paths.push("/api/organizations/" + (await CTP.api.getOrgId()) + "/chat_snapshots/" + page.id + q);
+      } catch (e) {}
+      paths.push("/api/chat_snapshots/" + page.id + q);
+      var lastErr = null;
+      for (var i = 0; i < paths.length; i++) {
+        try {
+          return await CTP.api.fetchJSON(paths[i]);
+        } catch (e) {
+          lastErr = e;
+        }
+      }
+      throw lastErr || new Error("Could not load this shared conversation.");
     }
     if (page.kind === "chat") {
       var org = await CTP.api.getOrgId();
@@ -247,13 +260,46 @@ CTP.api = {
     return "";
   },
 
-  partsFromEl: function (el) {
+  partsFromEl: function (el, appearance) {
     if (!el) return [];
-    var clone = el.cloneNode(true);
-    clone.querySelectorAll("button, svg, [aria-hidden='true']").forEach(function (n) {
+    var marks = [];
+    /* Charts have to be captured from the live element — their colours, fonts
+       and sizes come from claude.ai's stylesheet, not from the markup. Mark
+       their place in the original so they stay inline in the transcript. */
+    var figures = [];
+    if (CTP.figure) {
+      CTP.figure.collect(el).forEach(function (fig) {
+        var part = CTP.figure.capture(fig, appearance || CTP.api.pageAppearance());
+        if (part) figures.push({ el: fig, part: part });
+      });
+    }
+    /* Tag the live nodes so the same nodes can be found in the clone, then swap
+       each whole chart for its token — its title and legend are inside the
+       capture already and must not also come through as loose prose. */
+    figures.forEach(function (hit, i) {
+      hit.el.setAttribute("data-ctp-figure", String(i));
+    });
+    var clone;
+    try {
+      clone = el.cloneNode(true);
+    } finally {
+      figures.forEach(function (hit) {
+        hit.el.removeAttribute("data-ctp-figure");
+      });
+    }
+    clone.querySelectorAll("[data-ctp-figure]").forEach(function (n) {
+      var i = +n.getAttribute("data-ctp-figure");
+      if (!figures[i]) return;
+      marks.push(figures[i].part);
+      n.parentNode.replaceChild(
+        document.createTextNode("\n\n%%CTP" + (marks.length - 1) + "%%\n\n"),
+        n
+      );
+    });
+
+    clone.querySelectorAll("button, svg, canvas, [aria-hidden='true']").forEach(function (n) {
       n.remove();
     });
-    var marks = [];
     clone.querySelectorAll("pre, img").forEach(function (n) {
       var token = document.createTextNode("\n\n%%CTP" + marks.length + "%%\n\n");
       if (n.tagName === "PRE") {
@@ -282,50 +328,56 @@ CTP.api = {
     var tail = raw.slice(last).trim();
     if (tail) parts.push({ type: "markdown", text: tail });
     return parts.filter(function (p) {
-      return p && (p.text || p.src);
+      return p && (p.text || p.src || p.html);
     });
+  },
+
+  /* Message elements, in page order, with their role. claude.ai labels these
+     with data-testid; the class names are the older fallback. */
+  messageEls: function () {
+    var out = [];
+    var nodes = document.querySelectorAll(
+      '[data-testid="user-message"], [data-testid="assistant-message"], ' +
+        ".font-user-message, .font-claude-message, .font-claude-response"
+    );
+    nodes.forEach(function (el) {
+      for (var i = 0; i < out.length; i++) {
+        if (out[i].el.contains(el) || el.contains(out[i].el)) return;
+      }
+      var tid = el.getAttribute("data-testid") || "";
+      var cls = String(el.className || "");
+      var human = tid === "user-message" || /font-user-message/.test(cls);
+      out.push({ el: el, role: human ? "human" : "assistant" });
+    });
+    return out;
   },
 
   fromDom: function (page) {
     var title = CTP.api.pageTitle();
+    var appearance = CTP.api.pageAppearance();
     var messages = [];
-    var h2s = document.querySelectorAll("main h2");
-    if (h2s.length) {
-      h2s.forEach(function (h, i) {
-        var heading = (h.textContent || "").trim();
-        var role = /you said|^you\b/i.test(heading) ? "human" : "assistant";
-        var container = h.closest("section, article") || h.parentElement;
-        var next = h2s[i + 1];
-        var rangeRoot = document.createElement("div");
-        if (container && (!next || !container.contains(next))) {
-          rangeRoot = container.cloneNode(true);
-        } else {
-          var node = h.nextElementSibling;
-          while (node && node.tagName !== "H2" && node !== (next && next.parentElement)) {
-            if (next && node.contains(next)) break;
-            rangeRoot.appendChild(node.cloneNode(true));
-            node = node.nextElementSibling;
-          }
-        }
-        var parts = CTP.api.partsFromEl(rangeRoot);
-        if (!parts.length) return;
-        messages.push({
-          uuid: "dom-" + i,
-          sender: role,
-          created_at: null,
-          content: [],
-          _parts: parts,
-          text: heading.replace(/^(You said|Claude responded):\s*/i, ""),
-        });
+    CTP.api.messageEls().forEach(function (hit, i) {
+      var parts = CTP.api.partsFromEl(hit.el, appearance);
+      if (!parts.length) return;
+      var first = parts.find(function (p) {
+        return p.type === "markdown" && p.text;
       });
-    }
+      messages.push({
+        uuid: "dom-" + i,
+        sender: hit.role,
+        created_at: null,
+        content: [],
+        _parts: parts,
+        text: first ? first.text.split("\n")[0].slice(0, 200) : "",
+      });
+    });
     if (!messages.length) {
       var main = document.querySelector("main") || document.body;
       messages.push({
         uuid: "dom-0",
         sender: "assistant",
         content: [],
-        _parts: CTP.api.partsFromEl(main),
+        _parts: CTP.api.partsFromEl(main, appearance),
       });
     }
     return {

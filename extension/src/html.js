@@ -115,8 +115,9 @@ CTP.html = (function () {
       "hr { border: 0; border-top: 1px solid var(--line); margin: 22px 0; }\n" +
       "figure.att { margin: 12px 0 14px; }\n" +
       "figure.att img, img.shot { max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 5px; display: block; background: var(--paper); }\n" +
-      "figure.att.diagram { background: #f4f1ec; padding: 10px; border: 1px solid var(--line); border-radius: 8px; }\n" +
-      "figure.att.diagram img { background: #f4f1ec; border: 0; }\n" +
+      "figure.att.diagram { background: var(--tint); padding: 10px; border: 1px solid var(--line); border-radius: 8px; }\n" +
+      "figure.att.diagram img { background: transparent; border: 0; }\n" +
+      figureCss(resolved) +
       "figcaption { font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 8pt; color: var(--mute); margin-top: 5px; }\n" +
       "table.md { border-collapse: collapse; width: 100%; margin: 12px 0 14px; font-size: 9.5pt; }\n" +
       "table.md th, table.md td { border: 1px solid var(--line); padding: 6px 8px; vertical-align: top; }\n" +
@@ -130,6 +131,41 @@ CTP.html = (function () {
       ".sources ol { margin: 8px 12px 10px; padding-left: 18px; font-size: 8.6pt; }\n" +
       ".sources li { margin-bottom: 4px; }\n" +
       "@media print { html, body, #doc, .doc { background: var(--paper) !important; color: var(--ink) !important; } }\n"
+    );
+  }
+
+  /*
+   * A captured chart arrives as live HTML carrying frozen inline styles. The
+   * document's own typography (Georgia, 10.4pt, line-height 1.55, list and
+   * paragraph margins) would otherwise leak into it, so every node inside is
+   * reverted to the user-agent default first; the inline styles, which beat any
+   * stylesheet rule, then paint the chart exactly as the page drew it.
+   */
+  function figureCss(resolved) {
+    var dark = resolved === "dark";
+    return (
+      ".ctpfig { margin: 14px 0 16px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--tint); break-inside: avoid; page-break-inside: avoid; }\n" +
+      /* A widget showing its table view is taller than a page; forcing it to
+         stay whole would push it off the sheet instead. */
+      ".ctpfig.tall { break-inside: auto; page-break-inside: auto; }\n" +
+      ".ctpfig table { border-collapse: collapse; }\n" +
+      ".ctpfig tr { break-inside: avoid; page-break-inside: avoid; }\n" +
+      /* Reset only the HTML chrome around the drawing. `all` must never reach
+         the SVG: in Chrome d/x/y/width/height/r are real CSS properties, and a
+         stylesheet rule outranks the presentation attributes the chart uses to
+         carry its geometry, so reverting them erases every path. Everything
+         inside the <svg> already carries its own frozen styles. */
+      ".ctpfig *:not(svg, svg *) { all: revert; -webkit-print-color-adjust: exact; print-color-adjust: exact; }\n" +
+      ".ctpfig, .ctpfig * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }\n" +
+      ".ctpfig .ctpfig-v { display: none; margin: 0; padding: 0; }\n" +
+      ".ctpfig .ctpfig-v[data-variant=\"" + (dark ? "dark" : "light") + "\"] { display: block; }\n" +
+      "html.theme-warm .ctpfig .ctpfig-v, html.theme-light .ctpfig .ctpfig-v, html.theme-slate .ctpfig .ctpfig-v, html.theme-dark .ctpfig .ctpfig-v { display: none; }\n" +
+      "html.theme-warm .ctpfig .ctpfig-v[data-variant=\"light\"], html.theme-light .ctpfig .ctpfig-v[data-variant=\"light\"], html.theme-slate .ctpfig .ctpfig-v[data-variant=\"light\"] { display: block; }\n" +
+      "html.theme-dark .ctpfig .ctpfig-v[data-variant=\"dark\"] { display: block; }\n" +
+      ".ctpfig svg { max-width: 100%; height: auto; }\n" +
+      "details.chartdata { margin: 10px 0 14px; }\n" +
+      "details.chartdata summary { font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; font-size: 8pt; color: var(--mute); cursor: pointer; letter-spacing: .04em; text-transform: uppercase; font-weight: 700; }\n" +
+      "details.chartdata table.md { font-size: 8pt; margin-top: 8px; }\n"
     );
   }
 
@@ -346,6 +382,7 @@ CTP.html = (function () {
     text_editor_code_execution: true,
     visualize: true,
     "visualize:show_widget": true,
+    chart_display_v0: true,
     memory: true,
     memory_search: true,
     conversation_search: true,
@@ -459,6 +496,64 @@ CTP.html = (function () {
     return parts;
   }
 
+  /*
+   * chart_display_v0 carries the chart as data: {title, x_axis:{data:[]},
+   * y_axis:{title}, series:[{name, values:[]}]}. The picture itself is captured
+   * from the page (figure.js); this turns the same input into a table so the
+   * numbers are still in the PDF if the capture could not run.
+   */
+  function chartTable(input) {
+    if (!CTP.util.isRecord(input)) return null;
+    var xAxis = CTP.util.isRecord(input.x_axis) ? input.x_axis : {};
+    var labels = Array.isArray(xAxis.data) ? xAxis.data : [];
+    var series = Array.isArray(input.series) ? input.series : [];
+    if (!labels.length || !series.length) return null;
+    var yTitle = (CTP.util.isRecord(input.y_axis) && input.y_axis.title) || "";
+    var head = ["<tr><th>" + CTP.util.escapeHtml(xAxis.title || "")+ "</th>"];
+    series.forEach(function (sr) {
+      head.push("<th>" + CTP.util.escapeHtml((sr && sr.name) || "Series") + "</th>");
+    });
+    head.push("</tr>");
+    var rows = [];
+    for (var i = 0; i < labels.length; i++) {
+      var cells = ["<tr><th>" + CTP.util.escapeHtml(String(labels[i])) + "</th>"];
+      for (var j = 0; j < series.length; j++) {
+        var vals = (series[j] && series[j].values) || [];
+        var v = vals[i];
+        cells.push("<td>" + (v == null ? "" : CTP.util.escapeHtml(String(v))) + "</td>");
+      }
+      cells.push("</tr>");
+      rows.push(cells.join(""));
+    }
+    var caption = [input.title, yTitle].filter(Boolean).join(" · ");
+    var mdRows = ["| " + (xAxis.title || "") + " | " + series.map(function (sr) {
+      return (sr && sr.name) || "Series";
+    }).join(" | ") + " |"];
+    mdRows.push("|" + Array(series.length + 2).join("---|") + "---|");
+    for (var r = 0; r < labels.length; r++) {
+      mdRows.push(
+        "| " + labels[r] + " | " +
+        series.map(function (sr) {
+          var v = ((sr && sr.values) || [])[r];
+          return v == null ? "" : String(v);
+        }).join(" | ") + " |"
+      );
+    }
+    return {
+      type: "html",
+      chartData: true,
+      md: (caption ? "**" + caption + "**\n\n" : "") + mdRows.join("\n"),
+      html:
+        '<details class="chartdata"><summary>' +
+        CTP.util.escapeHtml(caption || "Chart data") +
+        "</summary><table class=\"md\"><thead>" +
+        head.join("") +
+        "</thead><tbody>" +
+        rows.join("") +
+        "</tbody></table></details>",
+    };
+  }
+
   function citationItems(block) {
     var list = (block && (block.citations || block.sources)) || [];
     if (!Array.isArray(list)) return [];
@@ -566,29 +661,8 @@ CTP.html = (function () {
       seen.add(src);
       extras.push({ type: "image", src: src, href: src, alt: img.alt || "", caption: img.alt || "" });
     });
-    document.querySelectorAll("main svg, article svg").forEach(function (svg) {
-      if (svg.closest("button, a, [aria-hidden='true']")) return;
-      var box = svg.getBoundingClientRect ? svg.getBoundingClientRect() : { width: 0, height: 0 };
-      if (box.width && box.height && (box.width < 64 || box.height < 64)) return;
-      try {
-        var clone = svg.cloneNode(true);
-        if (!clone.getAttribute("xmlns")) clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-        var markup = new XMLSerializer().serializeToString(clone);
-        var prepared = prepareSvg(markup);
-        if (!prepared) return;
-        var url = svgDataUrl(prepared);
-        if (!url || seen.has(url)) return;
-        seen.add(url);
-        extras.push({
-          type: "image",
-          src: url,
-          href: url,
-          alt: svg.getAttribute("aria-label") || "diagram",
-          caption: svg.getAttribute("aria-label") || "",
-          diagram: true,
-        });
-      } catch (e) {}
-    });
+    /* Charts and diagrams are captured as live HTML by CTP.figure, not
+       serialised to a data: URL — see figure.js. */
     document.querySelectorAll("main canvas, article canvas").forEach(function (canvas) {
       if (canvas.width < 64 || canvas.height < 64) return;
       try {
@@ -608,6 +682,49 @@ CTP.html = (function () {
     return out;
   }
 
+  /* How many charts the conversation should have, so the page only gets
+     scrolled when one of them is missing from the DOM. */
+  function countChartTools(messages) {
+    var n = 0;
+    messages.forEach(function (m) {
+      (Array.isArray(m.content) ? m.content : []).forEach(function (b) {
+        if (!b || b.type !== "tool_use") return;
+        var name = String(b.name || "");
+        if (name.indexOf("chart") !== -1 || name.indexOf("visualize") !== -1) n += 1;
+      });
+    });
+    return n;
+  }
+
+  /*
+   * Hand a message the charts captured from its own rendered copy. Counting
+   * assistant messages does not work — claude.ai keeps only a few mounted — so
+   * the match is made on the message's own words, which survive the trip from
+   * markdown to rendered text once punctuation and casing are dropped.
+   */
+  function claimFigures(items, msg, parts) {
+    if (!items || !items.length || !CTP.figure) return [];
+    var sample = "";
+    (Array.isArray(msg.content) ? msg.content : []).forEach(function (b) {
+      if (sample.length >= 120) return;
+      if (b && b.type === "text" && b.text) sample += " " + b.text;
+    });
+    if (!sample) {
+      parts.forEach(function (p) {
+        if (sample.length < 120 && p && p.type === "markdown" && p.text) sample += " " + p.text;
+      });
+    }
+    var key = CTP.figure.textKey(sample).slice(0, 60);
+    if (key.length < 24) return [];
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].used) continue;
+      if (items[i].key.indexOf(key) === -1) continue;
+      items[i].used = true;
+      return items[i].parts;
+    }
+    return [];
+  }
+
   async function prepare(data, page, opts) {
     opts = opts || {};
     var messages = CTP.api.selectBranch(data);
@@ -616,6 +733,35 @@ CTP.html = (function () {
     var whoUser = opts.userName || CTP.api.userName(data);
     var usedUrls = [];
     var turns = [];
+
+    /* The theme decides how a captured chart's neutral colours are flipped, so
+       it has to be settled before anything is captured. */
+    var appearance = opts.appearance || CTP.api.pageAppearance();
+    opts.appearance = appearance;
+
+    /* Charts live in the page, not in the API payload: the API gives us the
+       widget's source, the page gives us what the reader actually saw. Capture
+       per assistant message so each chart lands back in its own turn. */
+    var figScan = { items: [], errors: [], messagesSeen: 0 };
+    if (!opts.skipDomFigures && !data._fromDom && CTP.figure) {
+      try {
+        CTP.util.progress("Loading the whole conversation…");
+        figScan = await CTP.figure.scanAll(
+          appearance,
+          function (n) {
+            CTP.util.progress("Capturing charts… " + n + " found");
+          },
+          countChartTools(messages)
+        );
+      } catch (e) {
+        figScan = { items: [], errors: [(e && e.message) || String(e)], messagesSeen: 0 };
+      }
+    }
+    var figureErrors = figScan.errors || [];
+    var figuresFound = 0;
+    (figScan.items || []).forEach(function (it) {
+      figuresFound += it.parts.length;
+    });
 
     for (var mi = 0; mi < messages.length; mi++) {
       if (mi === 0 || (mi + 1) % 2 === 0 || mi + 1 === messages.length) {
@@ -707,6 +853,12 @@ CTP.html = (function () {
                 title: "File: " + (input.path || input.description || "created file"),
                 text: input.file_text || input.content,
               });
+              continue;
+            }
+
+            if (name === "chart_display_v0" || name.indexOf("chart_display") === 0) {
+              var chartPart = chartTable(input);
+              if (chartPart) parts.push(chartPart);
               continue;
             }
 
@@ -807,6 +959,26 @@ CTP.html = (function () {
       }
 
       parts = parts.filter(Boolean);
+
+      var myFigures = [];
+      if (msg.sender !== "human") {
+        myFigures = claimFigures(figScan.items, msg, parts);
+      }
+      if (myFigures.length) {
+        /* the live render supersedes anything rebuilt from widget source */
+        parts = parts.filter(function (p) {
+          return !(p && p.type === "image" && p.diagram);
+        });
+        parts = parts.concat(myFigures);
+      } else {
+        /* no picture to show, so the numbers had better be visible */
+        parts.forEach(function (p) {
+          if (p && p.chartData) {
+            p.html = p.html.replace('<details class="chartdata">', '<details class="chartdata" open>');
+          }
+        });
+      }
+
       var sourceBag = [];
       parts = parts.filter(function (p) {
         if (p.type === "sources") {
@@ -832,6 +1004,27 @@ CTP.html = (function () {
         heading: "",
         parts: parts,
       });
+    }
+
+    var unplacedFigures = [];
+    (figScan.items || []).forEach(function (it) {
+      if (!it.used) unplacedFigures = unplacedFigures.concat(it.parts);
+    });
+    if (unplacedFigures.length && turns.length) {
+      var host = null;
+      for (var hi = turns.length - 1; hi >= 0; hi--) {
+        if (turns[hi].role === "claude") {
+          host = turns[hi];
+          break;
+        }
+      }
+      if (host) {
+        host.parts = host.parts
+          .filter(function (p) {
+            return !(p && p.type === "image" && p.diagram);
+          })
+          .concat(unplacedFigures);
+      }
     }
 
     var extra = [];
@@ -879,6 +1072,9 @@ CTP.html = (function () {
         " | Exported " +
         CTP.util.exportedStamp() +
         (data.model ? " | " + data.model : ""),
+      charts: figuresFound,
+      chartErrors: figureErrors,
+      messagesInPage: figScan.messagesSeen || 0,
       source: (page && page.url) || location.href,
       disclaimer: share
         ? "This is a copy of a chat between Claude and " +

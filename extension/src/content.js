@@ -1,6 +1,6 @@
 /* global CTP */
 (function () {
-  window.__ctpVersion = "1.0.3";
+  window.__ctpVersion = "1.0.6";
 
   var overlay = null;
   var overlayStarted = 0;
@@ -124,6 +124,20 @@
     };
   }
 
+  /* The chart count rides back to the popup: a chart that silently failed to
+     capture is otherwise invisible until someone reads the PDF. */
+  function summary(format, model) {
+    return {
+      ok: true,
+      format: format,
+      turns: model.turns.length,
+      title: model.title,
+      charts: model.charts || 0,
+      chartErrors: model.chartErrors || [],
+      messagesInPage: model.messagesInPage || 0,
+    };
+  }
+
   async function runExport(opts) {
     opts = opts || {};
     var page = CTP.api.detectPage();
@@ -153,6 +167,11 @@
       usedDom = true;
     }
 
+    /* Charts are captured against the page's own colours, so the target theme
+       has to be settled before prepare() runs. */
+    opts.appearance = opts.appearance || CTP.api.pageAppearance();
+    opts.theme = CTP.html.resolveTheme(opts.theme, opts.appearance);
+
     CTP.util.progress("Inlining images and code…");
     var model = await CTP.html.prepare(data, page, opts);
     if (!model.turns.length) {
@@ -162,15 +181,12 @@
       model.meta += " | Captured from the page";
     }
 
-    opts.appearance = opts.appearance || CTP.api.pageAppearance();
-    opts.theme = CTP.html.resolveTheme(opts.theme, opts.appearance);
-
     var base = CTP.util.sanitizeFilename(model.title);
     var format = opts.format || "pdf";
 
     if (format === "md") {
       CTP.util.downloadText(CTP.md.transcript(model), base + ".md", "text/markdown;charset=utf-8");
-      return { ok: true, format: "md", turns: model.turns.length, title: model.title };
+      return summary("md", model);
     }
 
     var payload = CTP.html.buildPayload(model, opts);
@@ -184,7 +200,7 @@
         payload.body +
         "</body></html>";
       CTP.util.downloadText(doc, base + ".html", "text/html;charset=utf-8");
-      return { ok: true, format: "html", turns: model.turns.length, title: model.title };
+      return summary("html", model);
     }
 
     CTP.util.progress("Opening print preview…");
@@ -193,7 +209,7 @@
       ctpSavedAt: Date.now(),
     });
     await chrome.runtime.sendMessage({ type: "OPEN_VIEWER" });
-    return { ok: true, format: "pdf", turns: model.turns.length, title: model.title };
+    return summary("pdf", model);
     } finally {
       CTP.ui.hide();
     }

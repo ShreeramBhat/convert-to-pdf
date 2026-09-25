@@ -267,7 +267,11 @@ CTP.md = (function () {
     if (part.type === "file") {
       return "*Attachment: " + (part.name || "file") + (part.extra ? " · " + part.extra : "") + "*";
     }
-    if (part.type === "html") return "";
+    if (part.type === "html") {
+      if (part.md) return part.md;
+      if (part.figure) return "*Chart: " + (part.label || "figure") + "*";
+      return "";
+    }
     if (part.type === "sources") {
       return (part.items || [])
         .map(function (it, i) {
