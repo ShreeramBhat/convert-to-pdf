@@ -47,6 +47,21 @@ If Claude’s internal API is blocked (some share pages), the extension falls ba
 reading the rendered page. That fallback keeps the charts and the wording but loses
 markdown structure such as headings and lists.
 
+## Tests
+
+The renderer runs without Chrome, so it can be exercised from the command line:
+
+```bash
+node test/e2e.js                      # current working tree
+CTP_SRC=/path/to/older/src node test/e2e.js   # any other revision, to see which checks bite
+```
+
+`test/harness.js` loads the real files from `src/` behind the smallest browser
+surface they actually touch; the fixtures copy shapes taken from live claude.ai
+API responses. The checks cover step cards, the chip left behind by an image
+that will not inline, relative `preview_url` resolution, and image de-duplication
+against the page sweep.
+
 ## Permissions
 
 | Permission | Why |
